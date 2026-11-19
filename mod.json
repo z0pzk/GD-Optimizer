@@ -1,0 +1,59 @@
+{
+	"geode": "5.11.2",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "yourname.gd-optimizer",
+	"name": "GD Optimizer",
+	"version": "v1.0.0",
+	"developer": "yourname",
+	"description": "Lightweight CPU and GPU optimizer for Geometry Dash 2.2081.",
+	"settings": {
+		"auto-ldm": {
+			"type": "bool",
+			"name": "Auto LDM",
+			"description": "Forces Low Detail Mode on all levels automatically.",
+			"default": true
+		},
+		"strip-high-detail-deco": {
+			"type": "bool",
+			"name": "Strip High-Detail Deco",
+			"description": "Skips loading decoration objects marked as High Detail to save CPU.",
+			"default": true
+		},
+		"disable-particles": {
+			"type": "bool",
+			"name": "Disable Particles",
+			"description": "Stops particle emission and skips rendering particle quads.",
+			"default": true
+		},
+		"disable-glow": {
+			"type": "bool",
+			"name": "Disable Object Glow",
+			"description": "Hides glow sprites on level objects to reduce draw overhead.",
+			"default": true
+		},
+		"disable-death-effect": {
+			"type": "bool",
+			"name": "Disable Death Effect",
+			"description": "Removes death explosion particles to prevent lag spikes on death.",
+			"default": false
+		},
+		"hide-background": {
+			"type": "bool",
+			"name": "Hide Level Background",
+			"description": "Hides the level background sprite to save GPU fillrate.",
+			"default": false
+		},
+		"high-cpu-priority": {
+			"type": "bool",
+			"name": "High CPU Priority (Windows)",
+			"description": "Sets GeometryDash.exe process priority to High.",
+			"default": true,
+			"platforms": ["win"]
+		}
+	}
+}
