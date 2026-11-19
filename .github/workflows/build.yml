@@ -1,0 +1,129 @@
+{
+	"geode": "5.11.2",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "z0pzk.gd-optimizer",
+	"name": "GD Optimizer",
+	"version": "v2.0.0",
+	"developer": "yourname",
+	"description": "Engine-level CPU & GPU optimizer: adaptive visibility throttling, spatial deco pruning, additive overdraw killer, and Windows timer boost.",
+	"settings": {
+		"adaptive-vis-throttle": {
+			"type": "bool",
+			"name": "Adaptive Visibility Throttle (CPU)",
+			"description": "Automatically skips redundant updateVisibility passes during lag spikes while keeping physics at full speed.",
+			"default": true
+		},
+		"throttle-threshold-ms": {
+			"type": "int",
+			"name": "Throttle Trigger (ms per frame)",
+			"description": "Frame time threshold to activate throttling (16 ms = 60 FPS, 8 ms = 120 FPS).",
+			"default": 16,
+			"min": 6,
+			"max": 33
+		},
+		"max-vis-skip": {
+			"type": "int",
+			"name": "Max Visibility Stride",
+			"description": "Run updateVisibility once every N frames under heavy load (2-3 is optimal).",
+			"default": 3,
+			"min": 1,
+			"max": 4
+		},
+		"spatial-deco-limit": {
+			"type": "bool",
+			"name": "Spatial Deco Pruning (CPU + GPU)",
+			"description": "Flattens stacked decoration layers per grid cell on level load without touching gameplay objects.",
+			"default": true
+		},
+		"max-deco-per-cell": {
+			"type": "int",
+			"name": "Max Deco Objects per Cell",
+			"description": "Maximum allowed decoration sprites stacked in the same grid cell.",
+			"default": 3,
+			"min": 1,
+			"max": 12
+		},
+		"grid-cell-size": {
+			"type": "int",
+			"name": "Spatial Grid Cell Size (units)",
+			"description": "30 units = 1 standard GD block. Larger cell = more aggressive deco pruning.",
+			"default": 30,
+			"min": 10,
+			"max": 120
+		},
+		"max-total-deco": {
+			"type": "int",
+			"name": "Hard Total Deco Limit",
+			"description": "Stop loading extra decoration objects after this count (0 = unlimited).",
+			"default": 15000,
+			"min": 0,
+			"max": 100000
+		},
+		"cull-tiny-deco": {
+			"type": "bool",
+			"name": "Cull Tiny Deco",
+			"description": "Skips loading decorative objects scaled below 0.25x.",
+			"default": true
+		},
+		"skip-additive-batches": {
+			"type": "bool",
+			"name": "Kill Additive Overdraw (GPU)",
+			"description": "Skips additive-blended (GL_ONE) batch nodes in levels to slash GPU fillrate load.",
+			"default": true
+		},
+		"auto-ldm": {
+			"type": "bool",
+			"name": "Auto LDM",
+			"description": "Forces built-in Low Detail Mode on all levels.",
+			"default": true
+		},
+		"strip-high-detail-deco": {
+			"type": "bool",
+			"name": "Strip High-Detail Deco",
+			"description": "Skips loading decoration objects flagged as High Detail.",
+			"default": true
+		},
+		"disable-glow": {
+			"type": "bool",
+			"name": "Disable Object Glow",
+			"description": "Hides glow sprites on level objects.",
+			"default": true
+		},
+		"disable-particles": {
+			"type": "bool",
+			"name": "Disable Particles",
+			"description": "Stops particle emission and skips rendering particle quads.",
+			"default": true
+		},
+		"disable-trails": {
+			"type": "bool",
+			"name": "Disable Player Trail (keeps Wave)",
+			"description": "Disables CCMotionStreak vertex rebuilds while keeping the wave trail visible.",
+			"default": false
+		},
+		"disable-death-effect": {
+			"type": "bool",
+			"name": "Disable Death Effect",
+			"description": "Removes death explosion to avoid respawn lag spikes.",
+			"default": false
+		},
+		"hide-background": {
+			"type": "bool",
+			"name": "Hide Level Background",
+			"description": "Hides the level background sprite.",
+			"default": false
+		},
+		"win-scheduler-boost": {
+			"type": "bool",
+			"name": "Windows Scheduler & 1ms Timer Boost",
+			"description": "High process/thread priority, 1ms timer resolution, and disables EcoQoS throttling.",
+			"default": true,
+			"platforms": ["win"]
+		}
+	}
+}
