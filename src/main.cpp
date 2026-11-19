@@ -1,5 +1,4 @@
 #include <Geode/Geode.hpp>
-#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/CCSpriteBatchNode.hpp>
@@ -48,7 +47,6 @@ namespace {
     };
 
     OptConfig g_cfg;
-    bool g_forceVisibilityWarmup = true;
 
 #ifdef GEODE_IS_WINDOWS
     bool g_timerBoostActive = false;
@@ -63,7 +61,6 @@ namespace {
             enable ? THREAD_PRIORITY_HIGHEST : THREAD_PRIORITY_NORMAL
         );
 
-        // 1ms Windows timer resolution (loaded dynamically so no extra linker libs needed)
         if (HMODULE winmm = LoadLibraryA("winmm.dll")) {
             using TimePeriodFn = UINT(WINAPI*)(UINT);
             if (enable && !g_timerBoostActive) {
@@ -80,7 +77,6 @@ namespace {
             }
         }
 
-        // Disable Windows 10/11 EcoQoS / Power Throttling (ProcessPowerThrottling == 4)
         if (HMODULE kernel32 = GetModuleHandleA("kernel32.dll")) {
             struct PowerThrottlingState {
                 ULONG Version;
@@ -91,7 +87,7 @@ namespace {
             if (auto fn = reinterpret_cast<SetProcInfoFn>(GetProcAddress(kernel32, "SetProcessInformation"))) {
                 PowerThrottlingState state{};
                 state.Version = 1;
-                state.ControlMask = 1; // PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+                state.ControlMask = 1;
                 state.StateMask = enable ? 0 : 1;
                 fn(GetCurrentProcess(), 4, &state, sizeof(state));
             }
@@ -149,41 +145,58 @@ $on_mod(Loaded) {
     listenForSettingChanges<bool>("hide-background", [](bool v) { g_cfg.hideBackground = v; });
 }
 
-class $modify(OptBaseGameLayer, GJBaseGameLayer) {
+class $modify(OptPlayLayer, PlayLayer) {
     struct Fields {
+        std::unordered_map<uint64_t, int> decoCells;
+        int64_t totalDecoLoaded = 0;
+
         int skipCounter = 0;
-        int warmupFrames = 15;
+        int warmupFrames = 12;
         float accumDt = 0.f;
         double smoothedFrameMs = 16.6;
         std::chrono::steady_clock::time_point lastTime = std::chrono::steady_clock::now();
     };
 
-    void updateVisibility(float dt) {
-        auto* pl = PlayLayer::get();
-        if (!g_cfg.adaptiveVisThrottle || !pl || static_cast<GJBaseGameLayer*>(pl) != this) {
-            GJBaseGameLayer::updateVisibility(dt);
-            return;
-        }
+    void resetWarmup() {
+        m_fields->warmupFrames = 12;
+        m_fields->accumDt = 0.f;
+        m_fields->skipCounter = 0;
+        m_fields->lastTime = std::chrono::steady_clock::now();
+    }
 
-        if (g_forceVisibilityWarmup) {
-            m_fields->warmupFrames = 12;
-            m_fields->accumDt = 0.f;
-            m_fields->skipCounter = 0;
-            g_forceVisibilityWarmup = false;
+    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+        m_fields->decoCells.clear();
+        m_fields->totalDecoLoaded = 0;
+        resetWarmup();
+
+        if (g_cfg.autoLdm && level) {
+            level->m_lowDetailModeToggled = true;
+        }
+        return PlayLayer::init(level, useReplay, dontCreateObjects);
+    }
+
+    void resetLevel() {
+        resetWarmup();
+        PlayLayer::resetLevel();
+    }
+
+    void updateVisibility(float dt) {
+        if (!g_cfg.adaptiveVisThrottle) {
+            PlayLayer::updateVisibility(dt);
+            return;
         }
 
         auto now = std::chrono::steady_clock::now();
         double frameMs = std::chrono::duration<double, std::milli>(now - m_fields->lastTime).count();
         m_fields->lastTime = now;
 
-        // Ignore alt-tab / pause / level load spikes
         if (frameMs > 0.1 && frameMs < 200.0) {
             m_fields->smoothedFrameMs = m_fields->smoothedFrameMs * 0.85 + frameMs * 0.15;
         }
 
         if (m_fields->warmupFrames > 0) {
             m_fields->warmupFrames--;
-            GJBaseGameLayer::updateVisibility(dt);
+            PlayLayer::updateVisibility(dt);
             return;
         }
 
@@ -204,31 +217,8 @@ class $modify(OptBaseGameLayer, GJBaseGameLayer) {
             float totalDt = m_fields->accumDt;
             m_fields->accumDt = 0.f;
             m_fields->skipCounter = 0;
-            GJBaseGameLayer::updateVisibility(totalDt);
+            PlayLayer::updateVisibility(totalDt);
         }
-    }
-};
-
-class $modify(OptPlayLayer, PlayLayer) {
-    struct Fields {
-        std::unordered_map<uint64_t, int> decoCells;
-        int64_t totalDecoLoaded = 0;
-    };
-
-    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
-        m_fields->decoCells.clear();
-        m_fields->totalDecoLoaded = 0;
-        g_forceVisibilityWarmup = true;
-
-        if (g_cfg.autoLdm && level) {
-            level->m_lowDetailModeToggled = true;
-        }
-        return PlayLayer::init(level, useReplay, dontCreateObjects);
-    }
-
-    void resetLevel() {
-        g_forceVisibilityWarmup = true;
-        PlayLayer::resetLevel();
     }
 
     void addObject(GameObject* obj) {
@@ -269,78 +259,67 @@ class $modify(OptPlayLayer, PlayLayer) {
             }
 
             if (g_cfg.disableGlow) {
-                obj->m_hasNoGlow = true;
-                if (obj->m_glowSprite) {
-                    obj->m_glowSprite->setVisible(false);
-                }
-            }
-        }
-
-        PlayLayer::addObject(obj);
-    }
-
-    void setupHasCompleted() {
-        PlayLayer::setupHasCompleted();
-
-        // Free temporary spatial grid right after loading finishes
-        std::unordered_map<uint64_t, int>().swap(m_fields->decoCells);
-
-        if (g_cfg.hideBackground && m_background) {
-            m_background->setVisible(false);
-        }
-    }
+            obj->m_hasNoGlow = true;
+            if (obj->m_glowSprite) {
+            obj->m_glowSprite->setVisible(false);
+}
+}
+}
+PlayLayer::addObject(obj);
+}
+void setupHasCompleted() {
+PlayLayer::setupHasCompleted();
+std::unordered_map<uint64_t, int>().swap(m_fields->decoCells);
+if (g_cfg.hideBackground && m_background) {
+m_background->setVisible(false);
+}
+}
 };
-
 class $modify(OptSpriteBatchNode, CCSpriteBatchNode) {
-    void draw() {
-        if (g_cfg.skipAdditiveBatches && PlayLayer::get() != nullptr) {
-            if (this->getBlendFunc().dst == GL_ONE) {
-                return;
-            }
-        }
-        CCSpriteBatchNode::draw();
-    }
+void draw() {
+if (g_cfg.skipAdditiveBatches && PlayLayer::get() != nullptr) {
+if (this->getBlendFunc().dst == GL_ONE) {
+return;
+}
+}
+CCSpriteBatchNode::draw();
+}
 };
-
 class $modify(OptPlayerObject, PlayerObject) {
-    void playDeathEffect() {
-        if (g_cfg.disableDeathEffect) {
-            return;
-        }
-        PlayerObject::playDeathEffect();
-    }
+void playDeathEffect() {
+if (g_cfg.disableDeathEffect) {
+return;
+}
+PlayerObject::playDeathEffect();
+}
 };
-
 class $modify(OptParticleSystem, CCParticleSystem) {
-    void update(float dt) {
-        if (g_cfg.disableParticles && this->getEmissionRate() > 0.f) {
-            this->setEmissionRate(0.f);
-        }
-        CCParticleSystem::update(dt);
-    }
+void update(float dt) {
+if (g_cfg.disableParticles && this->getEmissionRate() > 0.f) {
+this->setEmissionRate(0.f);
+}
+CCParticleSystem::update(dt);
+}
 };
-
 class $modify(OptParticleSystemQuad, CCParticleSystemQuad) {
-    void draw() {
-        if (g_cfg.disableParticles) {
-            return;
-        }
-        CCParticleSystemQuad::draw();
-    }
+void draw() {
+if (g_cfg.disableParticles) {
+return;
+}
+CCParticleSystemQuad::draw();
+}
 };
-
 class $modify(OptMotionStreak, CCMotionStreak) {
-    void update(float delta) {
-        if (g_cfg.disableTrails) {
-            return;
-        }
-        CCMotionStreak::update(delta);
-    }
-
-    void draw() {
-        if (g_cfg.disableTrails) {
-            return;
-        }
-        CCMotionStreak::draw();
-    }
+void update(float delta) {
+if (g_cfg.disableTrails) {
+return;
+}
+CCMotionStreak::update(delta);
+}
+void draw() {
+if (g_cfg.disableTrails) {
+return;
+}
+CCMotionStreak::draw();
+}
 };
